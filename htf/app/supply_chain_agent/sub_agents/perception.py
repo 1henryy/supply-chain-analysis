@@ -42,8 +42,8 @@ Provide a clear summary with:
   (e.g., "Which suppliers in [region] could be affected?" or "What is the cascade risk if [supplier type] is disrupted?")
 
 Keep your analysis concise. Focus on disruptions that could realistically impact
-an automotive electronics manufacturer with suppliers in Taiwan, China, South Korea,
-Japan, USA, Germany, Chile, Peru, Malaysia, and India.
+the company's supply chain based on its known supplier regions and industries.
+Use resolve_entities_to_suppliers to discover which regions and industries are relevant.
 
 If no significant disruptions are found, say so clearly and note the current risk posture.
 """,

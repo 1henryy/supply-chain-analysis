@@ -19,3 +19,6 @@ data/supply_chain.db
 
 # OS
 .DS_Store
+.adk/
+*.db
+.DS_Store

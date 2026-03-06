@@ -165,6 +165,28 @@ def get_past_disruptions(limit: int = 20) -> list[dict]:
         ]
 
 
+def get_recent_decisions(limit: int = 10) -> list[dict]:
+    with get_session() as s:
+        logs = (
+            s.query(DecisionLog)
+            .order_by(DecisionLog.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": d.id,
+                "agent_name": d.agent_name,
+                "decision": d.decision,
+                "reasoning": d.reasoning,
+                "risk_score": d.risk_score,
+                "confidence": d.confidence,
+                "timestamp": d.timestamp.isoformat() if d.timestamp else None,
+            }
+            for d in logs
+        ]
+
+
 # ---------------------------------------------------------------------------
 # WRITE helpers (used ONLY by execution layer)
 # ---------------------------------------------------------------------------
@@ -196,6 +218,37 @@ def log_decision(agent_name, decision, reasoning, risk_score=None, confidence=No
         s.add(entry)
         s.flush()
         return entry.id
+
+
+def update_supplier_from_disruption(supplier_id, reliability_delta, lead_time_delta,
+                                    capacity_delta):
+    """Mutate a supplier's state in response to a confirmed disruption."""
+    with get_session() as s:
+        sup = s.query(Supplier).filter(Supplier.id == supplier_id).first()
+        if not sup:
+            return None
+        sup.reliability_score = max(0.0, min(1.0, sup.reliability_score + reliability_delta))
+        sup.lead_time_days = max(1, sup.lead_time_days + lead_time_delta)
+        sup.capacity_utilization = max(0.0, min(1.0, sup.capacity_utilization + capacity_delta))
+        s.flush()
+        return {
+            "id": sup.id,
+            "name": sup.name,
+            "reliability_score": sup.reliability_score,
+            "lead_time_days": sup.lead_time_days,
+            "capacity_utilization": sup.capacity_utilization,
+        }
+
+
+def adjust_inventory(product_id, quantity_delta):
+    """Adjust inventory quantity for a product (negative to reduce)."""
+    with get_session() as s:
+        inv = s.query(Inventory).filter(Inventory.product_id == product_id).first()
+        if not inv:
+            return None
+        inv.quantity = max(0, inv.quantity + quantity_delta)
+        s.flush()
+        return {"product_id": product_id, "new_quantity": inv.quantity}
 
 
 def record_disruption_event(event_type, description, severity="medium",

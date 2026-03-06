@@ -51,42 +51,6 @@ streamlit run ui/app.py
 python main.py
 ```
 
-## Architecture
-
-7-agent sequential pipeline: `Perception → Knowledge Graph → Product Search → (Visualizer ∥ Risk Manager) → CSCO Planning → Action Execution`
-
-| Agent | Role | Model |
-|-------|------|-------|
-| 1 - Perception | Multi-source news monitoring + entity resolution | gemini-2.5-flash-lite |
-| 2 - Knowledge Graph | BFS propagation, centrality, PageRank | gemini-2.5-flash-lite |
-| 3 - Product Search | Supplier-product impact mapping | gemini-2.5-flash-lite |
-| 4 - Visualizer | Network graph data (Plotly) | gemini-2.5-flash-lite |
-| 5 - Risk Manager | 5-factor weighted risk scoring + Tier-1 aggregation | gemini-2.5-flash |
-| 6 - CSCO Planning | Mitigation strategy with critic reflection (LoopAgent) | gemini-2.5-flash |
-| 7 - Action Execution | Sourcing, PO adjustments, escalation alerts | gemini-2.5-flash-lite |
-
-## Project Structure
-
-```
-htf/app/
-├── main.py                          # CLI entry point
-├── requirements.txt
-├── supply_chain_agent/
-│   ├── agent.py                     # Root coordinator + pipeline
-│   ├── sub_agents/                  # 7 agent definitions
-│   └── tools/                       # 31+ deterministic tool functions
-├── src/
-│   ├── models.py                    # SQLAlchemy models
-│   ├── db_init.py                   # Demo data seeding
-│   ├── db_service.py                # Database helpers
-│   ├── graph_algorithms.py          # BFS, cascade, centrality, PageRank
-│   └── ingest.py                    # CSV/JSON data import
-├── ui/
-│   └── app.py                       # Streamlit dashboard (4 modes)
-└── data/
-    └── templates/                   # CSV/JSON import templates
-```
-
 ## Data Ingestion
 
 To use your own supply chain data, upload CSV/JSON files via the Streamlit UI (**Data Ingestion** mode) or use `src/ingest.py` programmatically. Templates are in `data/templates/`.

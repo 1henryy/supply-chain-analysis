@@ -10,8 +10,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-from src.db_init import init_database, seed_data
-from src.db_service import get_full_supply_chain_snapshot, get_past_disruptions
+from src.db_init import init_database
+from src.db_service import get_full_supply_chain_snapshot, get_past_disruptions, get_recent_decisions
 from src.graph_algorithms import (
     bfs_disruption_propagation,
     analyze_cascade_risk,
@@ -20,6 +20,15 @@ from src.graph_algorithms import (
 )
 from supply_chain_agent.tools.visualization_tools import get_graph_viz_data
 from supply_chain_agent.tools.risk_tools import compute_weighted_risk_score
+from supply_chain_agent.tools.perception_tools import (
+    fetch_disruption_signals,
+    classify_disruption_type,
+    extract_affected_entities,
+    resolve_entities_to_suppliers,
+)
+from supply_chain_agent.tools.product_tools import map_suppliers_to_products, assess_inventory_risk
+from supply_chain_agent.tools.planning_tools import find_alternative_suppliers, simulate_mitigation_tradeoffs
+from supply_chain_agent.tools.action_tools import apply_disruption_impact, trigger_emergency_reorder
 
 # ---------- Page Config ----------
 st.set_page_config(
@@ -31,7 +40,6 @@ st.set_page_config(
 
 # ---------- Init Database ----------
 engine = init_database()
-seed_data(engine)
 
 # ---------- Sidebar ----------
 st.sidebar.title("Supply Chain Resilience")
@@ -39,7 +47,7 @@ st.sidebar.caption("AI-Powered Disruption Analysis")
 
 mode = st.sidebar.radio(
     "Mode",
-    ["Dashboard", "Run AI Agent", "What-If Scenario", "Data Ingestion"],
+    ["Dashboard", "Run AI Agent", "Data Ingestion"],
     index=0,
 )
 
@@ -208,12 +216,60 @@ def build_risk_breakdown(breakdown: dict):
 # DASHBOARD MODE
 # ====================================================================
 if mode == "Dashboard":
-    st.title("Supply Chain Resilience Dashboard")
-
     snapshot = get_full_supply_chain_snapshot()
+    _dash_mfg = snapshot.get("manufacturer", {})
+    _dash_name = _dash_mfg.get("name", "")
+    st.title(f"{_dash_name + ' — ' if _dash_name else ''}Supply Chain Resilience Dashboard")
 
-    # Key metrics row
-    col1, col2, col3, col4 = st.columns(4)
+    if not snapshot["suppliers"]:
+        st.info("No supply chain data loaded. Go to **Data Ingestion** to upload your company data or load the demo dataset.")
+        st.stop()
+
+    # ==================================================================
+    # ACTIVE ALERTS — recent agent-detected disruptions
+    # ==================================================================
+    disruptions = get_past_disruptions(limit=10)
+    decisions = get_recent_decisions(limit=10)
+
+    # Find disruptions detected by the agent (source = "agent_detected") that are unresolved
+    agent_disruptions = [d for d in disruptions if d.get("resolved_at") is None]
+    # Find recent impact actions from the decision log
+    impact_decisions = [d for d in decisions if d["agent_name"] == "disruption_impact"]
+
+    if agent_disruptions or impact_decisions:
+        st.subheader("Active Disruption Alerts")
+
+        for d in agent_disruptions[:3]:
+            sev = d["severity"].upper()
+            sev_color = {"CRITICAL": "error", "HIGH": "error", "MEDIUM": "warning", "LOW": "info"}.get(sev, "info")
+            getattr(st, sev_color)(
+                f"**[{sev}] {d['event_type'].replace('_', ' ').title()}** — "
+                f"{d['affected_region'] or 'Global'}: {d['description'][:150]}"
+            )
+
+        if impact_decisions:
+            with st.expander("Agent Actions Taken", expanded=True):
+                for dec in impact_decisions[:5]:
+                    st.markdown(
+                        f"- **{dec['decision']}**  \n"
+                        f"  {dec['reasoning']}"
+                    )
+
+        # Auto-highlight the most recent disrupted supplier on the network graph
+        _auto_disrupted_id = 0
+        for d in agent_disruptions:
+            if d.get("affected_supplier_id"):
+                _auto_disrupted_id = d["affected_supplier_id"]
+                break
+
+        st.markdown("---")
+    else:
+        _auto_disrupted_id = 0
+
+    # ==================================================================
+    # KEY METRICS
+    # ==================================================================
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Suppliers", len(snapshot["suppliers"]))
     col2.metric("Products", len(snapshot["products"]))
     col3.metric("Active POs", len(snapshot["purchase_orders"]))
@@ -221,18 +277,56 @@ if mode == "Dashboard":
     spofs = detect_spofs(snapshot["suppliers"])
     col4.metric("SPOFs Detected", len(spofs), delta=f"{len(spofs)} critical", delta_color="inverse")
 
-    # Network Graph
+    # Count degraded suppliers (reliability below 0.8)
+    degraded_count = sum(1 for s in snapshot["suppliers"] if s["reliability_score"] < 0.80)
+    col5.metric("Degraded Suppliers", degraded_count,
+                delta=f"{degraded_count} below 0.80" if degraded_count else "all healthy",
+                delta_color="inverse" if degraded_count else "normal")
+
+    # ==================================================================
+    # SUPPLIER HEALTH — flag any degraded suppliers from disruption impact
+    # ==================================================================
+    degraded_suppliers = [s for s in snapshot["suppliers"] if s["reliability_score"] < 0.80]
+    if degraded_suppliers:
+        st.subheader("Degraded Suppliers")
+        deg_cols = st.columns(min(len(degraded_suppliers), 4))
+        for i, s in enumerate(degraded_suppliers[:4]):
+            with deg_cols[i]:
+                st.metric(
+                    f"#{s['id']} {s['name']}",
+                    f"Reliability: {s['reliability_score']:.2f}",
+                    delta=f"{s['reliability_score'] - 0.90:+.2f} from baseline",
+                    delta_color="inverse",
+                )
+                st.caption(f"T{s['tier']} | {s['region']} | Lead: {s['lead_time_days']}d | Cap: {s['capacity_utilization']:.0%}")
+
+    # ==================================================================
+    # NETWORK GRAPH — auto-highlights disrupted supplier if one exists
+    # ==================================================================
     st.subheader("Supply Chain Network")
+
+    # Show suppliers that are at-risk: disrupted, degraded, or SPOFs
+    _affected_supplier_ids = set()
+    for d in disruptions:
+        if d.get("affected_supplier_id"):
+            _affected_supplier_ids.add(d["affected_supplier_id"])
+    for s in snapshot["suppliers"]:
+        if s["reliability_score"] < 0.80 or s.get("is_single_source"):
+            _affected_supplier_ids.add(s["id"])
+    _affected_options = [0] + sorted(_affected_supplier_ids)
+
     disrupted_id = st.selectbox(
-        "Simulate disruption at supplier:",
-        options=[0] + [s["id"] for s in snapshot["suppliers"]],
+        "Highlight disrupted supplier:",
+        options=_affected_options,
         format_func=lambda x: "None (show full network)" if x == 0 else
             f"#{x} - {next((s['name'] for s in snapshot['suppliers'] if s['id'] == x), 'Unknown')}",
+        index=_affected_options.index(_auto_disrupted_id)
+              if _auto_disrupted_id in _affected_options else 0,
     )
     fig = build_network_graph(disrupted_id)
     st.plotly_chart(fig, use_container_width=True)
 
-    # Two columns: Cascade Analysis + Centrality
+    # Two columns: Cascade Analysis + Risk Score
     if disrupted_id > 0:
         col_left, col_right = st.columns(2)
 
@@ -250,9 +344,9 @@ if mode == "Dashboard":
             if cascade["affected_products"]:
                 st.write("**Affected Products:**")
                 for p in cascade["affected_products"]:
-                    icon = {"critical": "", "high": "", "medium": "", "low": ""}.get(p["criticality"], "")
-                    st.write(f"  {icon} **{p['product_name']}** - impact: {p['supply_chain_impact']:.2f}, "
-                             f"via {p['component']} ({'critical' if p['is_critical_component'] else 'non-critical'})")
+                    crit_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(p["criticality"], "")
+                    st.write(f"  {crit_icon} **{p['product_name']}** — impact: {p['supply_chain_impact']:.2f}, "
+                             f"via {p['component']} ({'CRITICAL' if p['is_critical_component'] else 'non-critical'})")
 
         with col_right:
             st.subheader("Risk Score")
@@ -270,7 +364,31 @@ if mode == "Dashboard":
                 st.error("Board notification required (revenue at risk > $5M)")
             st.info(f"Recommended action: {risk_data['recommended_action']}")
 
-    # Bottlenecks and SPOFs
+    # ==================================================================
+    # INVENTORY STATUS — highlights items below reorder point
+    # ==================================================================
+    st.subheader("Inventory Status")
+    products_map = {p["id"]: p for p in snapshot["products"]}
+
+    if snapshot["inventory"]:
+        inv_cols = st.columns(len(snapshot["inventory"]))
+        for i, inv in enumerate(snapshot["inventory"]):
+            prod = products_map.get(inv["product_id"], {})
+            below_reorder = inv["quantity"] < inv["reorder_point"]
+            with inv_cols[i]:
+                pct = inv["quantity"] / inv["reorder_point"] * 100 if inv["reorder_point"] > 0 else 100
+                st.metric(
+                    prod.get("name", f"Product {inv['product_id']}"),
+                    f"{inv['quantity']} units",
+                    delta=f"{pct - 100:+.0f}% vs reorder",
+                    delta_color="normal" if not below_reorder else "inverse",
+                )
+                if below_reorder:
+                    st.caption("⚠️ BELOW REORDER POINT")
+
+    # ==================================================================
+    # BOTTLENECKS & SPOFS
+    # ==================================================================
     st.subheader("Bottleneck Analysis")
     col_b1, col_b2 = st.columns(2)
 
@@ -278,225 +396,429 @@ if mode == "Dashboard":
         st.write("**Top Suppliers by Centrality:**")
         centrality = calculate_graph_centrality(snapshot["suppliers"])
         for i, c in enumerate(centrality[:6]):
-            st.write(f"{i+1}. **{c['supplier_name']}** (T{c['tier']}) - "
+            st.write(f"{i+1}. **{c['supplier_name']}** (T{c['tier']}) — "
                      f"centrality: {c['combined_centrality']:.3f}, "
                      f"in-degree: {c['in_degree']}, out-degree: {c['out_degree']}")
 
     with col_b2:
         st.write("**Single Points of Failure:**")
-        for sp in spofs:
-            sev_color = "red" if sp["severity"] == "critical" else "orange"
-            st.markdown(f":{sev_color}[**{sp['supplier_name']}** ({sp['severity'].upper()})]")
-            for reason in sp["reasons"]:
-                st.write(f"  - {reason}")
+        if spofs:
+            for sp in spofs:
+                sev_color = "red" if sp["severity"] == "critical" else "orange"
+                st.markdown(f":{sev_color}[**{sp['supplier_name']}** ({sp['severity'].upper()})]")
+                for reason in sp["reasons"]:
+                    st.write(f"  - {reason}")
+        else:
+            st.success("No single points of failure detected.")
 
-    # Inventory Status
-    st.subheader("Inventory Status")
-    inv_cols = st.columns(len(snapshot["products"]))
-    products_map = {p["id"]: p for p in snapshot["products"]}
-    for i, inv in enumerate(snapshot["inventory"]):
-        prod = products_map.get(inv["product_id"], {})
-        with inv_cols[i]:
-            pct = inv["quantity"] / inv["reorder_point"] * 100 if inv["reorder_point"] > 0 else 100
-            st.metric(
-                prod.get("name", f"Product {inv['product_id']}"),
-                f"{inv['quantity']} units",
-                delta=f"{pct - 100:+.0f}% vs reorder",
-                delta_color="normal" if pct >= 100 else "inverse",
-            )
-
-    # Past Disruptions
+    # ==================================================================
+    # DISRUPTION HISTORY + DECISION LOG
+    # ==================================================================
     st.subheader("Disruption History")
-    disruptions = get_past_disruptions(limit=5)
-    for d in disruptions:
-        with st.expander(f"[{d['severity'].upper()}] {d['event_type']} - {d['affected_region'] or 'Global'}"):
-            st.write(d["description"])
-            if d["mitigation_taken"]:
-                st.write(f"**Mitigation:** {d['mitigation_taken']}")
-            if d["mitigation_effectiveness"]:
-                st.progress(d["mitigation_effectiveness"], text=f"Effectiveness: {d['mitigation_effectiveness']:.0%}")
-            if d["revenue_impact"]:
-                st.write(f"**Revenue Impact:** ${d['revenue_impact']:,.0f}")
+    if disruptions:
+        for d in disruptions[:5]:
+            resolved_tag = "  ✅ Resolved" if d.get("resolved_at") else "  🔴 Active"
+            with st.expander(f"[{d['severity'].upper()}] {d['event_type'].replace('_', ' ').title()} — {d['affected_region'] or 'Global'}{resolved_tag}"):
+                st.write(d["description"])
+                if d["mitigation_taken"]:
+                    st.write(f"**Mitigation:** {d['mitigation_taken']}")
+                if d["mitigation_effectiveness"]:
+                    st.progress(d["mitigation_effectiveness"], text=f"Effectiveness: {d['mitigation_effectiveness']:.0%}")
+                if d["revenue_impact"]:
+                    st.write(f"**Revenue Impact:** ${d['revenue_impact']:,.0f}")
+    else:
+        st.info("No disruption events recorded yet.")
+
+    # Decision audit trail
+    if decisions:
+        st.subheader("Agent Decision Log")
+        for dec in decisions[:5]:
+            with st.expander(f"[{dec['agent_name']}] {dec['decision'][:80]}"):
+                if dec["reasoning"]:
+                    st.write(dec["reasoning"])
+                dc1, dc2, dc3 = st.columns(3)
+                if dec["risk_score"] is not None:
+                    dc1.metric("Risk Score", f"{dec['risk_score']:.2f}")
+                if dec["confidence"] is not None:
+                    dc2.metric("Confidence", f"{dec['confidence']:.2f}")
+                dc3.caption(dec["timestamp"])
 
 
 # ====================================================================
 # AI AGENT MODE
 # ====================================================================
 elif mode == "Run AI Agent":
-    st.title("AI Agent - Disruption Analysis")
-    st.caption("Run the 7-agent pipeline to analyze supply chain risks")
+    st.title("AI Agent - Live Pipeline Demo")
+    st.caption("Watch the 7-agent pipeline process real news into supply chain actions")
 
-    # Query input
-    default_queries = [
-        "Run a full disruption analysis",
-        "What happens if our Taiwan semiconductor suppliers are disrupted?",
-        "Analyze the risk if RareEarth Mining Co (supplier #13) fails",
-        "Check for current supply chain risks in the shipping sector",
-        "What did we learn from past disruptions?",
-    ]
+    _snap = get_full_supply_chain_snapshot()
+    if not _snap["suppliers"]:
+        st.info("No supply chain data loaded. Go to **Data Ingestion** to upload your company data or load the demo dataset.")
+        st.stop()
 
-    selected_query = st.selectbox("Quick queries:", ["Custom..."] + default_queries)
-    if selected_query == "Custom...":
-        user_query = st.text_area("Enter your query:", height=80)
-    else:
-        user_query = selected_query
+    import time
 
-    if st.button("Run Agent Pipeline", type="primary", use_container_width=True):
-        if not user_query or user_query == "Custom...":
-            st.warning("Please enter a query.")
+    # Build dynamic default query from the company's actual data
+    _industries = sorted(set(s["industry"] for s in _snap["suppliers"]))
+    _regions = sorted(set(s["region"] for s in _snap["suppliers"]))
+    _mfg = _snap.get("manufacturer", {})
+    _default_query = f"supply chain disruption {_industries[0] if _industries else 'manufacturing'} {_regions[0] if _regions else ''}"
+
+    query = st.text_input(
+        "Search query (news topic or disruption scenario):",
+        value=_default_query.strip(),
+    )
+
+    st.caption(f"Your network: {len(_snap['suppliers'])} suppliers across {', '.join(_regions) or 'various regions'} "
+               f"| Industries: {', '.join(_industries) or 'various'}")
+
+    if st.button("Run Live Analysis Pipeline", type="primary", use_container_width=True):
+        if not query.strip():
+            st.warning("Please enter a search query.")
         else:
-            with st.spinner("Running 7-agent analysis pipeline... (this may take 30-60 seconds)"):
-                try:
-                    from main import run_agent
-                    response = asyncio.run(run_agent(user_query))
-                    st.session_state["agent_response"] = response
-                    st.session_state["agent_query"] = user_query
-                    st.success("Analysis complete!")
-                except Exception as e:
-                    st.error(f"Agent pipeline failed: {str(e)}")
-                    import traceback
-                    st.code(traceback.format_exc())
+            pre_snapshot = get_full_supply_chain_snapshot()
 
-    # Display results
-    if "agent_response" in st.session_state:
-        st.subheader(f"Query: {st.session_state.get('agent_query', '')}")
-        st.markdown("---")
-        st.markdown(st.session_state["agent_response"])
+            # ==============================================================
+            # STAGE 1: Disruption Monitoring (Agent 1)
+            # ==============================================================
+            with st.status("**Agent 1: Disruption Monitoring** — Scanning news sources...", expanded=True) as status:
+                st.write("Fetching from Google News RSS...")
+                news_result = json.loads(fetch_disruption_signals(query))
+                articles = news_result.get("articles", [])
 
+                if articles:
+                    st.success(f"Found **{len(articles)} articles** from {news_result.get('source', 'news')}")
+                    for i, article in enumerate(articles[:5]):
+                        st.markdown(
+                            f"**{i+1}. {article['title']}**  \n"
+                            f"*{article.get('source', 'Unknown')}* — {article.get('published', '')}"
+                        )
+                else:
+                    st.warning("No articles found. Using query text for analysis.")
 
-# ====================================================================
-# WHAT-IF SCENARIO MODE
-# ====================================================================
-elif mode == "What-If Scenario":
-    st.title("What-If Scenario Analysis")
+                # Classify top articles
+                st.write("---")
+                st.write("Classifying disruption types...")
+                classifications = []
+                for article in articles[:3]:
+                    cls = json.loads(classify_disruption_type(
+                        article["title"], article.get("snippet", "")
+                    ))
+                    cls["article_title"] = article["title"]
+                    classifications.append(cls)
 
-    snapshot = get_full_supply_chain_snapshot()
+                if classifications:
+                    for cls in classifications:
+                        conf_pct = int(cls["confidence"] * 100)
+                        st.markdown(
+                            f"- **{cls['disruption_type'].replace('_', ' ').title()}** "
+                            f"(confidence: {conf_pct}%) — affects: {', '.join(cls['affected_sectors'])}"
+                        )
 
-    st.write("Select a disruption scenario to simulate:")
+                # Extract affected entities
+                st.write("---")
+                st.write("Extracting affected regions and industries...")
+                combined_text = " ".join(
+                    f"{a['title']} {a.get('snippet', '')}" for a in articles[:5]
+                ) or query
+                entities = json.loads(extract_affected_entities(combined_text, ""))
+                ec1, ec2, ec3 = st.columns(3)
+                ec1.metric("Regions", ", ".join(entities["affected_regions"]))
+                ec2.metric("Industries", ", ".join(entities["affected_industries"]))
+                ec3.metric("Severity", entities["severity_estimate"].upper())
 
-    scenario_type = st.selectbox("Scenario Type:", [
-        "Supplier Disruption",
-        "Regional Crisis",
-        "Industry-Wide Shortage",
-    ])
+                # Resolve to known suppliers
+                st.write("---")
+                st.write("Matching to known suppliers in our network...")
+                resolved = json.loads(resolve_entities_to_suppliers(combined_text))
+                matched_suppliers = resolved.get("matches", [])
 
-    if scenario_type == "Supplier Disruption":
-        supplier_id = st.selectbox(
-            "Select supplier to disrupt:",
-            [s["id"] for s in snapshot["suppliers"]],
-            format_func=lambda x: f"#{x} - {next((s['name'] for s in snapshot['suppliers'] if s['id'] == x), '')} "
-                                  f"(T{next((s['tier'] for s in snapshot['suppliers'] if s['id'] == x), '?')}, "
-                                  f"{next((s['region'] for s in snapshot['suppliers'] if s['id'] == x), '')})",
-        )
-        severity = st.select_slider("Severity:", ["low", "medium", "high", "critical"], value="high")
+                if matched_suppliers:
+                    for m in matched_suppliers[:5]:
+                        st.markdown(
+                            f"- **#{m['supplier_id']} {m['supplier_name']}** "
+                            f"(T{m['tier']}, {m['region']}) — "
+                            f"confidence: {int(m['confidence']*100)}% "
+                            f"({', '.join(m['match_reasons'])})"
+                        )
+                else:
+                    st.info("No direct supplier name matches. Falling back to region/industry matching.")
+                    # Fallback: find suppliers in affected regions
+                    snapshot = get_full_supply_chain_snapshot()
+                    for s in snapshot["suppliers"]:
+                        if s["region"] in entities["affected_regions"] or \
+                           s["industry"] in entities["affected_industries"]:
+                            matched_suppliers.append({
+                                "supplier_id": s["id"],
+                                "supplier_name": s["name"],
+                                "tier": s["tier"],
+                                "region": s["region"],
+                                "confidence": 0.4,
+                            })
+                    if matched_suppliers:
+                        for m in matched_suppliers[:5]:
+                            st.markdown(f"- **#{m['supplier_id']} {m['supplier_name']}** (T{m['tier']}, {m['region']})")
 
-        if st.button("Run Scenario", type="primary"):
-            col1, col2 = st.columns([2, 1])
+                status.update(label="**Agent 1: Disruption Monitoring** — Complete", state="complete")
 
-            with col1:
-                st.subheader("Network Impact")
-                fig = build_network_graph(supplier_id)
-                st.plotly_chart(fig, use_container_width=True)
+            if not matched_suppliers:
+                st.error("Could not identify any affected suppliers. Try a more specific query.")
+                st.stop()
 
-            with col2:
-                st.subheader("Risk Assessment")
-                risk_data = json.loads(compute_weighted_risk_score(supplier_id, severity))
-                st.plotly_chart(
-                    build_risk_gauge(risk_data["risk_score"], risk_data["classification"]),
-                    use_container_width=True,
-                )
+            primary_supplier_id = matched_suppliers[0]["supplier_id"]
+            best_severity = entities.get("severity_estimate", "medium")
+            best_disruption_type = classifications[0]["disruption_type"] if classifications else "general"
 
-            # Cascade details
-            cascade = analyze_cascade_risk(
-                snapshot["suppliers"], supplier_id,
-                snapshot["supplier_product_links"], snapshot["products"],
-            )
+            # ==============================================================
+            # STAGE 2: Knowledge Graph Query (Agent 2)
+            # ==============================================================
+            with st.status("**Agent 2: Knowledge Graph** — Running BFS propagation...", expanded=True) as status:
+                snapshot = get_full_supply_chain_snapshot()
 
-            st.subheader("Cascade Impact")
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            mc1.metric("Suppliers Affected", cascade["num_suppliers_affected"])
-            mc2.metric("Products Affected", cascade["num_products_affected"])
-            mc3.metric("Revenue at Risk", f"${cascade['total_revenue_at_risk']:,.0f}")
-            mc4.metric("Risk Score", f"{risk_data['risk_score']:.2f}")
+                st.write(f"BFS from **#{primary_supplier_id} {matched_suppliers[0]['supplier_name']}**...")
+                bfs_results = bfs_disruption_propagation(snapshot["suppliers"], primary_supplier_id)
 
-            st.plotly_chart(build_risk_breakdown(risk_data["component_breakdown"]), use_container_width=True)
+                st.write(f"**{len(bfs_results)} suppliers** in the propagation path:")
+                for node in bfs_results:
+                    bar = int(node["impact_score"] * 20) * "█"
+                    st.markdown(
+                        f"- **#{node['supplier_id']} {node['supplier_name']}** "
+                        f"(T{node['tier']}) — impact: {node['impact_score']:.2f} {bar}"
+                    )
 
-            # Human-in-the-loop gate
-            st.subheader("Decision Gate")
-            if risk_data["classification"] == "HIGH":
-                st.error(f"HIGH RISK - VP/CFO approval required")
-                if risk_data["board_notification_required"]:
-                    st.error("Board notification required (revenue > $5M)")
-
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("Approve Mitigation Actions", type="primary"):
-                        st.success("Approved - mitigation actions would be executed")
-                with col_b:
-                    if st.button("Reject / Request Review"):
-                        st.warning("Rejected - escalating for manual review")
-
-            elif risk_data["classification"] == "MEDIUM":
-                st.warning("MEDIUM RISK - Auto-executing with notification")
-            else:
-                st.success("LOW RISK - Auto-executing silently")
-
-    elif scenario_type == "Regional Crisis":
-        region = st.selectbox("Select region:", [
-            "Taiwan", "China", "South Korea", "Japan", "USA",
-            "Germany", "Chile", "Peru", "Malaysia", "India", "Red Sea",
-        ])
-
-        affected_suppliers = [s for s in snapshot["suppliers"] if s["region"] == region]
-        st.write(f"**{len(affected_suppliers)} suppliers in {region}:**")
-        for s in affected_suppliers:
-            st.write(f"  - #{s['id']} {s['name']} (T{s['tier']}, {s['industry']})")
-
-        if st.button("Simulate Regional Crisis", type="primary") and affected_suppliers:
-            st.subheader(f"Impact of {region} Crisis")
-
-            # Analyze cascade for each affected supplier
-            total_rev = 0
-            all_affected_products = set()
-            for s in affected_suppliers:
+                st.write("---")
+                st.write("Cascade risk analysis...")
                 cascade = analyze_cascade_risk(
-                    snapshot["suppliers"], s["id"],
+                    snapshot["suppliers"], primary_supplier_id,
                     snapshot["supplier_product_links"], snapshot["products"],
                 )
-                total_rev += cascade["total_revenue_at_risk"]
-                for p in cascade["affected_products"]:
-                    all_affected_products.add(p["product_name"])
+                cc1, cc2, cc3, cc4 = st.columns(4)
+                cc1.metric("Suppliers Hit", cascade["num_suppliers_affected"])
+                cc2.metric("Products Hit", cascade["num_products_affected"])
+                cc3.metric("Revenue at Risk", f"${cascade['total_revenue_at_risk']:,.0f}")
+                cc4.metric("Cascade Depth", f"{cascade['cascade_depth']} tiers")
 
-            st.metric("Total Revenue at Risk", f"${total_rev:,.0f}")
-            st.metric("Products Affected", len(all_affected_products))
+                status.update(label="**Agent 2: Knowledge Graph** — Complete", state="complete")
 
-            # Show network with first affected supplier highlighted
-            fig = build_network_graph(affected_suppliers[0]["id"])
-            st.plotly_chart(fig, use_container_width=True)
+            # ==============================================================
+            # STAGE 3: Product Search (Agent 3)
+            # ==============================================================
+            with st.status("**Agent 3: Product Search** — Mapping to affected products...", expanded=True) as status:
+                supplier_ids_str = ",".join(str(m["supplier_id"]) for m in matched_suppliers[:5])
+                product_map_result = json.loads(map_suppliers_to_products(supplier_ids_str))
+                affected_products = product_map_result.get("affected_products", [])
 
-    elif scenario_type == "Industry-Wide Shortage":
-        industry = st.selectbox("Select industry:", [
-            "semiconductor", "pcb_assembly", "pcb_raw", "passive_components",
-            "battery", "battery_materials", "sensors", "optics", "mining", "chemicals",
-        ])
+                if affected_products:
+                    for p in affected_products:
+                        crit_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(p["criticality"], "⚪")
+                        st.markdown(
+                            f"- {crit_icon} **{p['product_name']}** ({p['criticality']}) — "
+                            f"component: {p['component']} "
+                            f"{'⚠️ CRITICAL' if p['is_critical_component'] else ''} — "
+                            f"revenue: ${p['annual_revenue']:,.0f}"
+                        )
+                else:
+                    st.info("No direct product links found for matched suppliers.")
 
-        affected = [s for s in snapshot["suppliers"] if s["industry"] == industry]
-        st.write(f"**{len(affected)} suppliers in {industry}:**")
-        for s in affected:
-            st.write(f"  - #{s['id']} {s['name']} (T{s['tier']}, {s['region']})")
+                st.write("---")
+                st.write("Inventory risk check...")
+                inv_risk = json.loads(assess_inventory_risk())
+                critical_items = [r for r in inv_risk["inventory_risk"] if r["risk_level"] in ("critical", "high")]
+                if critical_items:
+                    for item in critical_items:
+                        st.warning(
+                            f"**{item['product_name']}**: {item['current_stock']} units "
+                            f"({item['days_of_supply']} days supply) — "
+                            f"risk: **{item['risk_level'].upper()}**"
+                        )
+                else:
+                    st.success("All inventory levels currently above reorder points.")
 
-        if st.button("Simulate Industry Shortage", type="primary") and affected:
-            total_rev = 0
-            for s in affected:
-                cascade = analyze_cascade_risk(
-                    snapshot["suppliers"], s["id"],
-                    snapshot["supplier_product_links"], snapshot["products"],
-                )
-                total_rev += cascade["total_revenue_at_risk"]
+                status.update(label="**Agent 3: Product Search** — Complete", state="complete")
 
-            st.metric("Total Revenue at Risk", f"${total_rev:,.0f}")
-            fig = build_network_graph(affected[0]["id"])
-            st.plotly_chart(fig, use_container_width=True)
+            # ==============================================================
+            # STAGE 4+5: Network Visualization + Risk Scoring (Parallel)
+            # ==============================================================
+            with st.status("**Agents 4+5: Visualization & Risk** — Running in parallel...", expanded=True) as status:
+                col_viz, col_risk = st.columns([3, 2])
+
+                with col_viz:
+                    st.write("**Agent 4: Network Visualizer**")
+                    fig = build_network_graph(primary_supplier_id)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col_risk:
+                    st.write("**Agent 5: Risk Manager**")
+                    risk_data = json.loads(compute_weighted_risk_score(primary_supplier_id, best_severity))
+                    st.plotly_chart(
+                        build_risk_gauge(risk_data["risk_score"], risk_data["classification"]),
+                        use_container_width=True,
+                    )
+                    st.plotly_chart(
+                        build_risk_breakdown(risk_data["component_breakdown"]),
+                        use_container_width=True,
+                    )
+
+                    if risk_data["board_notification_required"]:
+                        st.error("Board notification required (revenue > $5M)")
+                    st.info(f"Recommended: {risk_data['recommended_action']}")
+
+                status.update(label="**Agents 4+5: Visualization & Risk** — Complete", state="complete")
+
+            # ==============================================================
+            # STAGE 6: CSCO Planning (Agent 6)
+            # ==============================================================
+            with st.status("**Agent 6: CSCO Planning** — Finding alternatives & strategies...", expanded=True) as status:
+                st.write(f"Finding alternatives for **#{primary_supplier_id} {matched_suppliers[0]['supplier_name']}**...")
+                alternatives_result = json.loads(find_alternative_suppliers(primary_supplier_id))
+                alts = alternatives_result.get("alternatives", [])
+
+                if alts:
+                    for alt in alts[:3]:
+                        st.markdown(
+                            f"- **#{alt['supplier_id']} {alt['supplier_name']}** "
+                            f"(T{alt['tier']}, {alt['region']}) — "
+                            f"suitability: {alt['suitability_score']:.2f}, "
+                            f"reliability: {alt['reliability_score']:.2f}, "
+                            f"available capacity: {alt['available_capacity']:.0%}"
+                        )
+
+                    best_alt_id = alts[0]["supplier_id"]
+
+                    st.write("---")
+                    st.write("Comparing mitigation strategies...")
+                    strategies = ["reroute", "dual_source", "buffer", "expedite"]
+                    strat_results = []
+                    for strat in strategies:
+                        r = json.loads(simulate_mitigation_tradeoffs(
+                            strat, primary_supplier_id, best_alt_id
+                        ))
+                        if "error" not in r:
+                            strat_results.append(r)
+
+                    if strat_results:
+                        strat_cols = st.columns(len(strat_results))
+                        for i, sr in enumerate(strat_results):
+                            with strat_cols[i]:
+                                st.markdown(f"**{sr['strategy'].upper()}**")
+                                st.caption(sr["description"][:60])
+                                st.metric("Cost Increase", sr["estimated_cost_increase"])
+                                st.metric("Risk Reduction", f"{sr['risk_reduction']:.0%}")
+                                st.metric("Implementation", f"{sr['implementation_time_days']}d")
+                else:
+                    st.warning("No alternative suppliers found in the same industry.")
+
+                status.update(label="**Agent 6: CSCO Planning** — Complete", state="complete")
+
+            # ==============================================================
+            # STAGE 7: Action Execution (Agent 7)
+            # ==============================================================
+            with st.status("**Agent 7: Action Execution** — Applying impact & taking actions...", expanded=True) as status:
+                # Apply disruption impact to DB
+                st.write(f"Applying **{best_severity}** disruption impact to supplier #{primary_supplier_id}...")
+                impact_result = json.loads(apply_disruption_impact(
+                    primary_supplier_id, best_severity, best_disruption_type
+                ))
+
+                if impact_result.get("status") == "applied":
+                    updated = impact_result["supplier_updated"]
+                    im1, im2, im3 = st.columns(3)
+                    im1.metric("Reliability", f"{updated['reliability_score']:.2f}")
+                    im2.metric("Lead Time", f"{updated['lead_time_days']}d")
+                    im3.metric("Capacity", f"{updated['capacity_utilization']:.0%}")
+
+                    inv_adj = impact_result.get("inventory_adjustments", [])
+                    if inv_adj:
+                        st.write("**Inventory reductions:**")
+                        for adj in inv_adj:
+                            st.markdown(
+                                f"- {adj['component']}: **-{adj['units_lost']} units** "
+                                f"(now: {adj['new_quantity']})"
+                            )
+
+                # Emergency reorders
+                st.write("---")
+                st.write("Checking for emergency reorder needs...")
+                post_snapshot = get_full_supply_chain_snapshot()
+                reorders = []
+                for inv in post_snapshot["inventory"]:
+                    if inv["quantity"] < inv["reorder_point"]:
+                        ro = json.loads(trigger_emergency_reorder(inv["product_id"]))
+                        if ro.get("status") == "po_created":
+                            reorders.append(ro)
+
+                if reorders:
+                    st.warning(f"**{len(reorders)} emergency POs created:**")
+                    for ro in reorders:
+                        st.markdown(
+                            f"- **PO #{ro['po_id']}**: {ro['quantity']} units of **{ro['product']}** "
+                            f"from {ro['supplier']} — ${ro['total_cost']:,.0f} — "
+                            f"delivery: {ro['expected_delivery'][:10]}"
+                        )
+                else:
+                    st.success("No emergency reorders needed.")
+
+                status.update(label="**Agent 7: Action Execution** — Complete", state="complete")
+
+            # ==============================================================
+            # FINAL: Before/After Summary
+            # ==============================================================
+            st.markdown("---")
+            st.subheader("Before vs After — Network State")
+
+            post_snapshot = get_full_supply_chain_snapshot()
+            pre_map = {s["id"]: s for s in pre_snapshot["suppliers"]}
+
+            degraded = []
+            for s in post_snapshot["suppliers"]:
+                prev = pre_map.get(s["id"])
+                if prev and (
+                    s["reliability_score"] < prev["reliability_score"]
+                    or s["lead_time_days"] > prev["lead_time_days"]
+                ):
+                    degraded.append((prev, s))
+
+            if degraded:
+                for prev, curr in degraded:
+                    with st.expander(f"#{curr['id']} {curr['name']} (T{curr['tier']})", expanded=True):
+                        d1, d2, d3 = st.columns(3)
+                        d1.metric(
+                            "Reliability",
+                            f"{curr['reliability_score']:.2f}",
+                            delta=f"{curr['reliability_score'] - prev['reliability_score']:+.2f}",
+                            delta_color="inverse",
+                        )
+                        d2.metric(
+                            "Lead Time",
+                            f"{curr['lead_time_days']}d",
+                            delta=f"{curr['lead_time_days'] - prev['lead_time_days']:+d}d",
+                            delta_color="inverse",
+                        )
+                        d3.metric(
+                            "Capacity",
+                            f"{curr['capacity_utilization']:.0%}",
+                            delta=f"{curr['capacity_utilization'] - prev['capacity_utilization']:+.0%}",
+                            delta_color="inverse",
+                        )
+
+            # Inventory before vs after
+            st.subheader("Inventory Before vs After")
+            pre_inv = {inv["product_id"]: inv["quantity"] for inv in pre_snapshot["inventory"]}
+            products_map = {p["id"]: p for p in post_snapshot["products"]}
+            inv_cols = st.columns(len(post_snapshot["inventory"]))
+            for i, inv in enumerate(post_snapshot["inventory"]):
+                prod = products_map.get(inv["product_id"], {})
+                prev_qty = pre_inv.get(inv["product_id"], inv["quantity"])
+                delta = inv["quantity"] - prev_qty
+                with inv_cols[i]:
+                    st.metric(
+                        prod.get("name", f"Product {inv['product_id']}"),
+                        f"{inv['quantity']} units",
+                        delta=f"{delta:+d} units" if delta != 0 else "no change",
+                        delta_color="normal" if delta >= 0 else "inverse",
+                    )
+
+            st.success("Pipeline complete. All 7 agents have processed the disruption signal.")
 
 
 # ====================================================================
@@ -660,10 +982,12 @@ elif mode == "Data Ingestion":
     st.subheader("3. Manufacturer Configuration")
     st.write("Set or update the focal manufacturer (the company at the center of the supply chain).")
 
+    _current_mfg = get_full_supply_chain_snapshot().get("manufacturer", {})
+
     with st.form("manufacturer_form"):
-        mfg_name = st.text_input("Company Name", value="TechDrive Motors")
-        mfg_industry = st.text_input("Industry", value="automotive_electronics")
-        mfg_region = st.text_input("Region", value="Germany")
+        mfg_name = st.text_input("Company Name", value=_current_mfg.get("name", ""))
+        mfg_industry = st.text_input("Industry", value=_current_mfg.get("industry", ""))
+        mfg_region = st.text_input("Region", value=_current_mfg.get("region", ""))
         mfg_risk = st.selectbox(
             "Risk Appetite",
             ["conservative", "moderate", "aggressive"],
@@ -710,18 +1034,18 @@ elif mode == "Data Ingestion":
     # ------------------------------------------------------------------
     st.subheader("5. Load Demo Data")
     st.write(
-        "Re-seed the database with the default TechDrive Motors dataset "
+        "Re-seed the database with a sample automotive electronics dataset "
         "(16 suppliers across 3 tiers, 4 products, purchase orders, and disruption history)."
     )
 
-    if st.button("Load Demo Data (TechDrive Motors)", type="primary", key="btn_demo"):
+    if st.button("Load Demo Data", type="primary", key="btn_demo"):
         with st.spinner("Clearing and re-seeding demo data..."):
             try:
                 clear_all_data(engine)
                 from src.db_init import seed_data as _seed_data
                 _seed_data(engine)
                 st.success(
-                    "Demo data loaded successfully! TechDrive Motors: "
+                    "Demo data loaded successfully! "
                     "16 suppliers, 4 products, 3 purchase orders, 4 historical disruptions."
                 )
             except Exception as e:

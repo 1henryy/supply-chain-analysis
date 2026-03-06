@@ -108,7 +108,7 @@ def map_suppliers_to_products(supplier_ids: str) -> str:
             pid = link["product_id"]
             prod = products.get(pid, {})
             affected.append({
-                "product_id": pid,
+                "product_id": pid, 
                 "product_name": prod.get("name", "Unknown"),
                 "criticality": prod.get("criticality", "unknown"),
                 "affected_by_supplier_id": link["supplier_id"],
