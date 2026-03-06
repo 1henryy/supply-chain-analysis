@@ -1,0 +1,96 @@
+{
+  "manufacturer": {
+    "name": "Victoria Electronics",
+    "industry": "consumer_electronics",
+    "region": "USA",
+    "risk_appetite": "moderate"
+  },
+  "suppliers": [
+    {"name": "TSMC", "tier": 1, "region": "Taiwan", "industry": "semiconductor", "reliability_score": 0.93, "lead_time_days": 12, "capacity_utilization": 0.82, "revenue_impact": 8500000, "is_single_source": false},
+    {"name": "Schweizer Electronic", "tier": 1, "region": "Germany", "industry": "pcb_assembly", "reliability_score": 0.91, "lead_time_days": 10, "capacity_utilization": 0.75, "revenue_impact": 6200000, "is_single_source": false},
+    {"name": "Samsung SDI", "tier": 1, "region": "South Korea", "industry": "battery", "reliability_score": 0.88, "lead_time_days": 14, "capacity_utilization": 0.80, "revenue_impact": 7100000, "is_single_source": false},
+    {"name": "Sony Semiconductor Solutions", "tier": 1, "region": "Japan", "industry": "sensors", "reliability_score": 0.95, "lead_time_days": 8, "capacity_utilization": 0.68, "revenue_impact": 5400000, "is_single_source": false},
+
+    {"name": "ASE Technology", "tier": 2, "parent_supplier_name": "TSMC", "region": "Taiwan", "industry": "semiconductor", "reliability_score": 0.90, "lead_time_days": 18, "capacity_utilization": 0.85, "revenue_impact": 4200000, "is_single_source": false},
+    {"name": "GlobalFoundries", "tier": 2, "parent_supplier_name": "TSMC", "region": "USA", "industry": "semiconductor", "reliability_score": 0.87, "lead_time_days": 15, "capacity_utilization": 0.72, "revenue_impact": 3800000, "is_single_source": false},
+    {"name": "Kingboard Holdings", "tier": 2, "parent_supplier_name": "Schweizer Electronic", "region": "China", "industry": "pcb_raw", "reliability_score": 0.84, "lead_time_days": 20, "capacity_utilization": 0.78, "revenue_impact": 2900000, "is_single_source": false},
+    {"name": "Murata Manufacturing", "tier": 2, "parent_supplier_name": "Schweizer Electronic", "region": "Malaysia", "industry": "passive_components", "reliability_score": 0.89, "lead_time_days": 11, "capacity_utilization": 0.65, "revenue_impact": 2100000, "is_single_source": false},
+    {"name": "SQM (Sociedad Quimica y Minera)", "tier": 2, "parent_supplier_name": "Samsung SDI", "region": "Chile", "industry": "battery_materials", "reliability_score": 0.82, "lead_time_days": 25, "capacity_utilization": 0.88, "revenue_impact": 3500000, "is_single_source": true},
+    {"name": "BASF", "tier": 2, "parent_supplier_name": "Samsung SDI", "region": "China", "industry": "chemicals", "reliability_score": 0.86, "lead_time_days": 16, "capacity_utilization": 0.70, "revenue_impact": 2800000, "is_single_source": false},
+    {"name": "Hoya Corporation", "tier": 2, "parent_supplier_name": "Sony Semiconductor Solutions", "region": "Japan", "industry": "optics", "reliability_score": 0.92, "lead_time_days": 9, "capacity_utilization": 0.60, "revenue_impact": 2500000, "is_single_source": false},
+    {"name": "STMicroelectronics", "tier": 2, "parent_supplier_name": "Sony Semiconductor Solutions", "region": "India", "industry": "sensors", "reliability_score": 0.80, "lead_time_days": 22, "capacity_utilization": 0.74, "revenue_impact": 1900000, "is_single_source": false},
+
+    {"name": "Minsur", "tier": 3, "parent_supplier_name": "ASE Technology", "region": "Peru", "industry": "mining", "reliability_score": 0.78, "lead_time_days": 35, "capacity_utilization": 0.90, "revenue_impact": 1800000, "is_single_source": true},
+    {"name": "Air Liquide", "tier": 3, "parent_supplier_name": "GlobalFoundries", "region": "USA", "industry": "chemicals", "reliability_score": 0.91, "lead_time_days": 7, "capacity_utilization": 0.55, "revenue_impact": 900000, "is_single_source": false},
+    {"name": "Antofagasta PLC", "tier": 3, "parent_supplier_name": "Kingboard Holdings", "region": "Chile", "industry": "mining", "reliability_score": 0.76, "lead_time_days": 30, "capacity_utilization": 0.92, "revenue_impact": 1500000, "is_single_source": true},
+    {"name": "Merck KGaA", "tier": 3, "parent_supplier_name": "SQM (Sociedad Quimica y Minera)", "region": "Germany", "industry": "chemicals", "reliability_score": 0.94, "lead_time_days": 6, "capacity_utilization": 0.50, "revenue_impact": 800000, "is_single_source": false}
+  ],
+  "products": [
+    {"name": "Xperia 1 VII", "sku": "XP1-VII", "criticality": "critical", "annual_revenue": 12000000},
+    {"name": "PlayStation 6", "sku": "PS6-001", "criticality": "high", "annual_revenue": 8500000},
+    {"name": "Alpha 9 IV Camera", "sku": "A9IV-003", "criticality": "high", "annual_revenue": 7200000},
+    {"name": "WH-2000XM6 Headphones", "sku": "WH6-004", "criticality": "medium", "annual_revenue": 4800000}
+  ],
+  "supplier_product_links": [
+    {"supplier_name": "TSMC", "product_name": "Xperia 1 VII", "component_name": "Main SoC die", "is_critical": true},
+    {"supplier_name": "Schweizer Electronic", "product_name": "Xperia 1 VII", "component_name": "Processor PCB", "is_critical": true},
+    {"supplier_name": "TSMC", "product_name": "PlayStation 6", "component_name": "Custom AMD GPU die", "is_critical": true},
+    {"supplier_name": "Samsung SDI", "product_name": "PlayStation 6", "component_name": "Battery cell pack", "is_critical": true},
+    {"supplier_name": "Sony Semiconductor Solutions", "product_name": "Alpha 9 IV Camera", "component_name": "Exmor RS CMOS sensor", "is_critical": true},
+    {"supplier_name": "Schweizer Electronic", "product_name": "Alpha 9 IV Camera", "component_name": "Sensor PCB", "is_critical": false},
+    {"supplier_name": "Schweizer Electronic", "product_name": "WH-2000XM6 Headphones", "component_name": "Audio driver board", "is_critical": true},
+    {"supplier_name": "TSMC", "product_name": "WH-2000XM6 Headphones", "component_name": "Noise cancellation DSP", "is_critical": false}
+  ],
+  "inventory": [
+    {"product_name": "Xperia 1 VII", "quantity": 320, "reorder_point": 200, "safety_stock_days": 21},
+    {"product_name": "PlayStation 6", "quantity": 180, "reorder_point": 150, "safety_stock_days": 18},
+    {"product_name": "Alpha 9 IV Camera", "quantity": 95, "reorder_point": 120, "safety_stock_days": 14},
+    {"product_name": "WH-2000XM6 Headphones", "quantity": 410, "reorder_point": 100, "safety_stock_days": 14}
+  ],
+  "purchase_orders": [
+    {"supplier_name": "TSMC", "product_name": "Xperia 1 VII", "quantity": 500, "unit_cost": 85.50, "status": "confirmed", "expected_delivery": "2026-04-15"},
+    {"supplier_name": "Samsung SDI", "product_name": "PlayStation 6", "quantity": 300, "unit_cost": 62.00, "status": "shipped", "expected_delivery": "2026-03-20"},
+    {"supplier_name": "Sony Semiconductor Solutions", "product_name": "Alpha 9 IV Camera", "quantity": 200, "unit_cost": 110.00, "status": "pending", "expected_delivery": "2026-05-01"}
+  ],
+  "disruption_history": [
+    {
+      "event_type": "natural_disaster",
+      "severity": "high",
+      "affected_region": "Taiwan",
+      "affected_supplier_name": "TSMC",
+      "description": "Typhoon caused 2-week production halt at TSMC Fab 18 in Tainan. Wafer output dropped 40%.",
+      "source": "news_api",
+      "mitigation_taken": "Activated GlobalFoundries as secondary source, expedited existing orders",
+      "mitigation_effectiveness": 0.72,
+      "revenue_impact": 2400000,
+      "occurred_at": "2025-09-15",
+      "resolved_at": "2025-10-20"
+    },
+    {
+      "event_type": "geopolitical",
+      "severity": "medium",
+      "affected_region": "China",
+      "affected_supplier_name": "Kingboard Holdings",
+      "description": "New export controls on copper-clad laminates increased lead times by 8 days.",
+      "source": "news_api",
+      "mitigation_taken": "Increased safety stock, began qualifying Malaysian alternative",
+      "mitigation_effectiveness": 0.65,
+      "revenue_impact": 850000,
+      "occurred_at": "2025-11-01",
+      "resolved_at": "2026-01-15"
+    },
+    {
+      "event_type": "supplier_failure",
+      "severity": "critical",
+      "affected_region": "Chile",
+      "affected_supplier_name": "SQM (Sociedad Quimica y Minera)",
+      "description": "Mine collapse at SQM lithium extraction site in Atacama. Single-source SPOF — no alternative supplier qualified.",
+      "source": "erp_signal",
+      "mitigation_taken": "Emergency dual-source qualification with BASF, buffer stock drawdown",
+      "mitigation_effectiveness": 0.55,
+      "revenue_impact": 4100000,
+      "occurred_at": "2026-01-10",
+      "resolved_at": null
+    }
+  ]
+}

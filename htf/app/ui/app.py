@@ -305,13 +305,10 @@ if mode == "Dashboard":
     # ==================================================================
     st.subheader("Supply Chain Network")
 
-    # Show suppliers that are at-risk: disrupted, degraded, or SPOFs
+    # Show only degraded suppliers (reliability < 0.80) to match Degraded Suppliers section
     _affected_supplier_ids = set()
-    for d in disruptions:
-        if d.get("affected_supplier_id"):
-            _affected_supplier_ids.add(d["affected_supplier_id"])
     for s in snapshot["suppliers"]:
-        if s["reliability_score"] < 0.80 or s.get("is_single_source"):
+        if s["reliability_score"] < 0.80:
             _affected_supplier_ids.add(s["id"])
     _affected_options = [0] + sorted(_affected_supplier_ids)
 
