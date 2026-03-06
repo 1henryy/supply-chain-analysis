@@ -1,17 +1,3 @@
-"""
-Tools for Agent 1: Disruption Monitoring.
-Fetches real news signals from multiple configurable sources (Google News RSS,
-NewsAPI.org, GDELT, custom RSS feeds), classifies disruption types, and resolves
-entity mentions to known suppliers in the knowledge graph.
-
-Supported news sources:
-  - Google News RSS (default, free, no API key)
-  - NewsAPI.org (set NEWS_API_KEY in .env, free tier 100 req/day)
-  - GDELT Project (free, no key, event-based disruption monitoring)
-  - Custom RSS feeds (any URL)
-  - Manual alerts (supplier advisories, ERP signals)
-"""
-
 import json
 import os
 import re

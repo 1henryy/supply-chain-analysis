@@ -1,10 +1,3 @@
-"""
-Agent 3: Product Search (LlmAgent)
-
-Maps disrupted suppliers to affected products.
-Builds company-product chains preserving tier order.
-"""
-
 from google.adk.agents import LlmAgent
 
 from supply_chain_agent.tools.product_tools import (

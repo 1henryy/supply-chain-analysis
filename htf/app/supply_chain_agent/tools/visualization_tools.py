@@ -1,8 +1,3 @@
-"""
-Tools for Agent 4: Network Visualizer.
-Provides data structures for Plotly graph visualization.
-"""
-
 import json
 import sys
 import os

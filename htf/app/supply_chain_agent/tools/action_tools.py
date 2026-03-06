@@ -1,8 +1,3 @@
-"""
-Tools for Agent 7: Action Execution.
-Draft emails, generate PO adjustments, create alerts, record events.
-"""
-
 import json
 import sys
 import os

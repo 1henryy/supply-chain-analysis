@@ -1,8 +1,3 @@
-"""
-Tools for Agent 5: Risk Manager.
-Weighted risk formula with graph centrality component.
-"""
-
 import json
 import sys
 import os

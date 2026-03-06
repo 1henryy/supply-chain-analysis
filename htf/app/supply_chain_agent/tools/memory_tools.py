@@ -1,8 +1,3 @@
-"""
-Tools for the Memory Agent.
-Recall, search, and evaluate past disruption events.
-"""
-
 import json
 import sys
 import os

@@ -1,8 +1,3 @@
-"""
-Tools for Agent 3: Product Search.
-Maps disrupted suppliers to affected products.
-"""
-
 import json
 import sys
 import os

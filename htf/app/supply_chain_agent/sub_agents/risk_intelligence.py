@@ -1,11 +1,3 @@
-"""
-Agents 4+5: Parallel execution
-  Agent 4: Network Visualizer (LlmAgent) - Plotly graph visualization data
-  Agent 5: Risk Manager (LlmAgent) - Weighted risk scoring with graph centrality
-
-Wrapped in a ParallelAgent for concurrent execution.
-"""
-
 from google.adk.agents import LlmAgent, ParallelAgent
 
 from supply_chain_agent.tools.visualization_tools import get_graph_viz_data

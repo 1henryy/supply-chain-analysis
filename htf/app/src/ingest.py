@@ -1,15 +1,3 @@
-"""
-Data ingestion module for the Supply Chain Resilience Agent.
-
-Supports importing supplier networks, products, ERP signals (inventory, POs),
-and disruption history from CSV/JSON files or raw dicts.
-
-Reference: AlMahri et al. (2025) "Automating Supply Chain Disruption Monitoring
-via an Agentic AI Approach" — the extended supply chain network is a prerequisite
-for framework operation and can be sourced from provider databases, internal
-supplier records, or procurement data.
-"""
-
 import csv
 import io
 import json

@@ -1,8 +1,3 @@
-"""
-Tools for Agent 2: Knowledge Graph Query.
-Wraps graph_algorithms for use as Google ADK agent tools.
-"""
-
 import json
 import sys
 import os

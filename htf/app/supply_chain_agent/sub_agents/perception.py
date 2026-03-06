@@ -1,10 +1,3 @@
-"""
-Agent 1: Disruption Monitoring (LlmAgent)
-
-Detects and classifies disruptions from real news signals.
-Formulates risk questions for the Knowledge Graph agent (Agent 2).
-"""
-
 from google.adk.agents import LlmAgent
 
 from supply_chain_agent.tools.perception_tools import (

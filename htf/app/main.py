@@ -1,12 +1,3 @@
-"""
-Main entry point for running the Supply Chain Resilience Agent.
-
-Usage:
-  python main.py                    # Interactive mode
-  python main.py --init             # Initialize/seed database only
-  python main.py --query "..."      # Run a single query
-"""
-
 import asyncio
 import os
 import sys

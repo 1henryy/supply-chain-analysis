@@ -1,7 +1,3 @@
-"""
-Tools for Agent 6: CSCO Agent (planning/mitigation).
-"""
-
 import json
 import sys
 import os

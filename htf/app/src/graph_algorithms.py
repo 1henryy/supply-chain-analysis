@@ -1,18 +1,3 @@
-"""
-Graph traversal algorithms for supply chain network analysis.
-
-The supplier graph is a directed tree rooted at the manufacturer:
-  - Tier 3 -> Tier 2 -> Tier 1 -> Manufacturer
-  - Supplier.parent_supplier_id points DOWNSTREAM (toward manufacturer)
-  - Disruptions propagate DOWNSTREAM (from raw materials toward finished goods)
-
-Key algorithms:
-  1. BFS disruption propagation -- trace impact from source to manufacturer
-  2. Cascade risk analysis -- cumulative impact with attenuation per tier hop
-  3. Graph centrality -- betweenness, degree & PageRank centrality to find bottlenecks
-  4. SPOF detection -- single points of failure in the supply network
-"""
-
 from __future__ import annotations
 from collections import defaultdict, deque
 

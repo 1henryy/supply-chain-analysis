@@ -1,10 +1,3 @@
-"""
-Agent 2: Knowledge Graph Query (LlmAgent)
-
-Core graph traversal agent. BFS propagation through supplier network,
-cascade analysis with impact attenuation, graph centrality, bottleneck and SPOF detection.
-"""
-
 from google.adk.agents import LlmAgent
 
 from supply_chain_agent.tools.graph_tools import (

@@ -1,11 +1,3 @@
-"""
-Agent 6: CSCO Agent (LoopAgent with Reflection)
-
-Pattern: Iterative refinement with Strategy Critic.
-The CSCO agent produces a mitigation plan, then the Critic reviews it.
-Loop runs max 2 iterations to refine the plan.
-"""
-
 from google.adk.agents import LlmAgent, LoopAgent
 
 from supply_chain_agent.tools.planning_tools import (

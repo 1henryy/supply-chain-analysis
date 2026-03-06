@@ -1,15 +1,3 @@
-"""
-Streamlit UI for the Supply Chain Resilience Agent.
-
-Features:
-- Interactive Plotly network graph with BFS propagation overlay
-- 7-stage disruption analysis with graph traversal visualization
-- Risk score visualization with graph-centrality component breakdown
-- Cascade ripple timeline + bottleneck/SPOF detection
-- Human approval interface for high-risk PO changes
-- Decision transparency panel
-"""
-
 import streamlit as st
 import plotly.graph_objects as go
 import json

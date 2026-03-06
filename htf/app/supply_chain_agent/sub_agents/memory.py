@@ -1,10 +1,3 @@
-"""
-Memory Agent (LlmAgent)
-
-Provides historical context and learning from past disruptions.
-Called by the root coordinator when the user asks about past events.
-"""
-
 from google.adk.agents import LlmAgent
 
 from supply_chain_agent.tools.memory_tools import (

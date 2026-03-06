@@ -1,11 +1,3 @@
-"""
-Agent 7: Alternative Sourcing + Action Execution (SequentialAgent)
-
-Two sub-agents:
-  1. Alternative Sourcing Agent: Finds substitute suppliers for high-risk components
-  2. Action Execution Agent: Drafts emails, generates PO adjustments, creates alerts
-"""
-
 from google.adk.agents import LlmAgent, SequentialAgent
 
 from supply_chain_agent.tools.planning_tools import (

@@ -1,13 +1,3 @@
-"""
-Root Coordinator Agent - Entry point for the Supply Chain Resilience system.
-
-Pattern: Coordinator-Dispatcher
-  - Analyzes user intent
-  - Delegates to the 7-Agent Analysis Pipeline or Memory Agent
-
-Pipeline Flow: Agent 1 -> 2 -> 3 -> (4 || 5) -> 6 -> 7
-"""
-
 from google.adk.agents import LlmAgent, SequentialAgent
 
 from supply_chain_agent.sub_agents.perception import disruption_monitoring_agent
