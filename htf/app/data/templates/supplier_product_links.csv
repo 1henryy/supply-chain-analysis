@@ -1,0 +1,4 @@
+supplier_name,product_name,component_name,is_critical
+ChipFlow Semiconductors,AutoPilot ECU,MCU Chip Module,true
+CircuitPro Assembly,AutoPilot ECU,Main PCB Assembly,true
+ChipFlow Semiconductors,BatteryGuard BMS,BMS Controller Chip,true

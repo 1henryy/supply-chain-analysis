@@ -1,0 +1,4 @@
+name,sku,criticality,annual_revenue
+AutoPilot ECU,AP-ECU-001,critical,15000000
+BatteryGuard BMS,BG-BMS-002,high,10000000
+SafeView ADAS,SV-ADAS-003,high,8000000

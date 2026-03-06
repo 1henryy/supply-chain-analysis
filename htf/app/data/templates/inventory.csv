@@ -1,0 +1,4 @@
+product_name,quantity,reorder_point,safety_stock_days
+AutoPilot ECU,320,200,14
+BatteryGuard BMS,85,150,21
+SafeView ADAS,200,120,14

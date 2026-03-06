@@ -1,0 +1,6 @@
+name,tier,parent_supplier_name,region,industry,reliability_score,lead_time_days,capacity_utilization,revenue_impact,is_single_source
+ChipFlow Semiconductors,1,,Taiwan,semiconductor,0.92,14,0.85,12000000,false
+CircuitPro Assembly,1,,South Korea,pcb_assembly,0.95,10,0.70,8000000,false
+SiliconBase Foundry,2,ChipFlow Semiconductors,Taiwan,semiconductor,0.90,28,0.92,4000000,false
+WaferTech Inc,2,ChipFlow Semiconductors,USA,semiconductor,0.93,21,0.75,3500000,false
+RareEarth Mining Co,3,SiliconBase Foundry,China,mining,0.78,45,0.95,5000000,true

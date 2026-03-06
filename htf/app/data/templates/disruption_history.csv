@@ -1,0 +1,3 @@
+event_type,severity,affected_region,affected_supplier_name,description,source,mitigation_taken,mitigation_effectiveness,revenue_impact,occurred_at,resolved_at
+natural_disaster,critical,Taiwan,ChipFlow Semiconductors,Earthquake disrupted semiconductor fabs,historical,Emergency sourcing from backup supplier,0.7,2400000,2025-09-01,2025-09-22
+geopolitical,high,China,RareEarth Mining Co,Export restrictions on rare earth minerals,historical,Pre-negotiated stockpile agreement,0.6,1800000,2025-03-01,2025-04-15

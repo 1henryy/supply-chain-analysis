@@ -1,0 +1,15 @@
+google-adk>=0.3.0
+google-genai>=1.0.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+
+# UI
+streamlit>=1.30.0
+plotly>=5.18.0
+
+# News API
+requests>=2.31.0

@@ -1,0 +1,83 @@
+{
+  "manufacturer": {
+    "name": "TechDrive Motors",
+    "industry": "automotive_electronics",
+    "region": "Germany",
+    "risk_appetite": "moderate"
+  },
+  "suppliers": [
+    {
+      "name": "ChipFlow Semiconductors",
+      "tier": 1,
+      "parent_supplier_name": "",
+      "region": "Taiwan",
+      "industry": "semiconductor",
+      "reliability_score": 0.92,
+      "lead_time_days": 14,
+      "capacity_utilization": 0.85,
+      "revenue_impact": 12000000,
+      "is_single_source": false
+    },
+    {
+      "name": "SiliconBase Foundry",
+      "tier": 2,
+      "parent_supplier_name": "ChipFlow Semiconductors",
+      "region": "Taiwan",
+      "industry": "semiconductor",
+      "reliability_score": 0.90,
+      "lead_time_days": 28,
+      "capacity_utilization": 0.92,
+      "revenue_impact": 4000000,
+      "is_single_source": false
+    }
+  ],
+  "products": [
+    {
+      "name": "AutoPilot ECU",
+      "sku": "AP-ECU-001",
+      "criticality": "critical",
+      "annual_revenue": 15000000
+    }
+  ],
+  "supplier_product_links": [
+    {
+      "supplier_name": "ChipFlow Semiconductors",
+      "product_name": "AutoPilot ECU",
+      "component_name": "MCU Chip Module",
+      "is_critical": true
+    }
+  ],
+  "inventory": [
+    {
+      "product_name": "AutoPilot ECU",
+      "quantity": 320,
+      "reorder_point": 200,
+      "safety_stock_days": 14
+    }
+  ],
+  "purchase_orders": [
+    {
+      "supplier_name": "ChipFlow Semiconductors",
+      "product_name": "AutoPilot ECU",
+      "quantity": 200,
+      "unit_cost": 45.0,
+      "status": "confirmed",
+      "expected_delivery": "2026-03-15"
+    }
+  ],
+  "disruption_history": [
+    {
+      "event_type": "natural_disaster",
+      "severity": "critical",
+      "affected_region": "Taiwan",
+      "affected_supplier_name": "ChipFlow Semiconductors",
+      "description": "Earthquake disrupted semiconductor fabs",
+      "source": "historical",
+      "mitigation_taken": "Emergency sourcing from backup",
+      "mitigation_effectiveness": 0.7,
+      "revenue_impact": 2400000,
+      "occurred_at": "2025-09-01",
+      "resolved_at": "2025-09-22"
+    }
+  ]
+}
